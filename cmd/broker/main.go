@@ -73,7 +73,17 @@ func main() {
 
 	// * Bind middleware
 	startup.Info("Binding middleware for Broker Service")
+	// * Install middleware to ignore favicon (for testing microservices)
 	// * Install PPROF middleware for profiling
+	app.Use(func(c *fiber.Ctx) error {
+		if c.Path() == "/favicon.ico" {
+			c.Status(200)
+		} else {
+			c.Next()
+		}
+		return nil
+	})
+
 	app.Use(pprof.New())
 
 	app.Use(limiter.New(limiter.Config{
@@ -207,8 +217,6 @@ func main() {
 		opsProcessed.Inc()
 
 		metricPublisher.PublishCounter(metric.HttpRequestCountMetricName, c)
-		metricPublisher.PublishHistogram(metric.HttpRequestDurationMetricName, c, float64(time.Since(startTime).Milliseconds()))
-		metricPublisher.PublishHistogram(metric.HttpRequestDurationMicroMetricName, c, float64(time.Since(startTime).Microseconds()))
 
 		logger.Info("Request Completed",
 			zap.Int64("timeElapsedMillis", time.Since(startTime).Milliseconds()),

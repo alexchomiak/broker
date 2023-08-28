@@ -80,7 +80,10 @@ func (mc *MetricPublisher) Initialize(app *fiber.App) {
 
 		// * Install route metrics
 		mc.InsertCounter(fmt.Sprintf("%s_%s", HttpRequestCountMetricName, postfix), fmt.Sprintf("Number of HTTP requests for %s", key))
-		mc.InsertHistogram(fmt.Sprintf("%s_%s", HttpRequestDurationMetricName, postfix), fmt.Sprintf("Duration of HTTP requests for %s", key))
-		mc.InsertHistogram(fmt.Sprintf("%s_%s", HttpRequestDurationMicroMetricName, postfix), fmt.Sprintf("Duration of HTTP requests for %s", key))
+		mc.InsertHistogram(
+			fmt.Sprintf("%s_%s", HttpRequestDurationMetricName, postfix),
+			fmt.Sprintf("Duration of HTTP requests for %s", key),
+			[]float64{1, 2, 4, 8, 10, 25, 50, 100, 250, 500, 1000},
+		)
 	}
 }
