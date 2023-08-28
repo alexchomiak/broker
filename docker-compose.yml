@@ -6,12 +6,13 @@
 #
 # Note that this file is meant for learning Zipkin, not production deployments.
 
-version: '2'
+version: '3.4'
 
 services:
   storage:
     image: openzipkin/zipkin-mysql:latest
     container_name: mysql
+    
     # Uncomment to expose the storage port for testing
     # ports:
     # - 3306:3306

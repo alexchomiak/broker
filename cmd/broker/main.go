@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alexchomiak/broker/cmd/broker/metric"
 	"github.com/alexchomiak/broker/cmd/broker/model"
 	"github.com/alexchomiak/broker/cmd/broker/request"
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +17,12 @@ import (
 	"github.com/openzipkin/zipkin-go"
 	zipkinmodel "github.com/openzipkin/zipkin-go/model"
 	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpadaptor"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -36,6 +43,8 @@ func main() {
 		String: "service",
 	}))
 
+	metricPublisher := metric.NewMetricPublisher()
+
 	startup.Info("Initializing broker service")
 	app := fiber.New()
 
@@ -47,6 +56,20 @@ func main() {
 	} else {
 		port = "8080"
 	}
+
+	// * Install prom metrics handler
+	var metricsHandler fasthttp.RequestHandler
+	metricsHandler = fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler())
+
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		metricsHandler(c.Context())
+		return nil
+	})
+
+	opsProcessed := promauto.NewCounter(prometheus.CounterOpts{
+		Name: "myapp_processed_ops_total",
+		Help: "The total number of processed events",
+	})
 
 	// * Bind middleware
 	startup.Info("Binding middleware for Broker Service")
@@ -181,10 +204,17 @@ func main() {
 		logger.Info("Request Started", zap.Time("startTime", startTime))
 		infoSpan.Finish()
 		c.Next()
+		opsProcessed.Inc()
+
+		metricPublisher.PublishCounter(metric.HttpRequestCountMetricName, c)
+		metricPublisher.PublishHistogram(metric.HttpRequestDurationMetricName, c, float64(time.Since(startTime).Milliseconds()))
+		metricPublisher.PublishHistogram(metric.HttpRequestDurationMicroMetricName, c, float64(time.Since(startTime).Microseconds()))
+
 		logger.Info("Request Completed",
 			zap.Int64("timeElapsedMillis", time.Since(startTime).Milliseconds()),
 			zap.Int64("timeElapsedMicros", time.Since(startTime).Microseconds()),
 		)
+
 		return nil
 	})
 
@@ -224,6 +254,9 @@ func main() {
 
 		return c.SendStatus(200)
 	})
+
+	startup.Info("Binding metrics for Broker service")
+	metricPublisher.Initialize(app)
 
 	startup.Info("Starting up the broker service")
 	err := app.Listen(":" + port)
